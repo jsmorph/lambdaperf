@@ -1,0 +1,14 @@
+{
+    "N":0,
+    "ComputeTime": {
+	"Alpha":7,
+	"Beta":1
+    },
+    "BlockTime": {
+	"Alpha":7,
+	"Beta":1
+    },
+    "Computes": {
+	"Lambda": 10
+    }
+}
