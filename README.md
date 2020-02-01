@@ -9,12 +9,13 @@ Head to [`lambda`](lambda) and look at [`Makefile`](lambda/Makefile)
 to get the test Lambda going.
 
 Consider the compute/blocking mix distributions as specified in
-[`spec.json`](spec.json).
+[`spec.json`](spec.json).  That spec probably has about twice as much
+blocking time as CPU-constrained work.
 
 The run some tests:
 
 ```Shell
-(cd call-lambda && ./run.sh)
+(cd call-lambda && make && ./run.sh)
 ```
 
 Examine the output (`d.csv`):
@@ -24,7 +25,7 @@ library(tidyverse)
 d <- read_csv("call-lambda/d.csv")
 ggplot(d, aes(work,ms,color=mb,group=mb)) + 
 	geom_point(alpha=0.4) + 
-	geom_smooth() + 
+	geom_smooth(method=lm) + 
 	scale_colour_gradient(low="red",high="blue") +
 	labs(title="Work vs Elapsed time by RAM",
 	     subtitle="Blocking time is about twice compute time.")
@@ -43,7 +44,7 @@ d1$ms <- mean(d$work) * d1$e
 
 ![graph](eff-by-ram.png)
 
-The predicted mean latencies by RAM tier:
+The predicted mean latencies (milliseconds) by RAM tier:
 
 ```
     mb         e        ms
