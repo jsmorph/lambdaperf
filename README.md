@@ -112,6 +112,21 @@ slower than a 1GB Lambda.
 8 1024 2.235218  46.54842
 ```
 
+Jobs that do a third as much computation relative to blocking
+operations are only one half as slow at 128MB as at they are at 1GB:
+
+```
+    mb        e        ms
+1  128 9.480224 104.69723
+2  256 8.872136  97.98165
+3  384 8.264047  91.26607
+4  512 7.655958  84.55049
+5  640 7.047870  77.83491
+6  768 6.439781  71.11933
+7  896 5.831692  64.40375
+8 1024 5.223603  57.68817
+```
+
 Of course, the level of expected latency, in the context of a specific
 application, is an important consideration.
 
