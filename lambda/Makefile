@@ -3,7 +3,7 @@ all:	main.zip
 main.zip: main
 	build-lambda-zip --output main.zip main
 
-main: main.go
+main: main.go ../msgs.go Makefile
 	go build -o main main.go
 
 .PHONY: create-lambda
@@ -22,9 +22,13 @@ create-role:
 attach-policy:
 	aws iam attach-role-policy --role-name LambdaPerf --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
+.PHONY: call-lambda
+call-lambda:
+	call-lambda -spec "$$(cat ../spec.json)" -n 1
+
 .PHONY: test-lambda
 test-lambda:
-	aws lambda invoke --function-name PerfTest output.json --payload "$(cat ../spec.json)" --log-type Tail | tee result.json
+	aws lambda invoke --function-name PerfTest output.json --payload '{"N":1,"StepKeys":10,"StepRounds":10}' --log-type Tail | tee result.json
 	cat result.json | jq -c -r .LogResult | base64 --decode
 	cat output.json | jq -r .
 

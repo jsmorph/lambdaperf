@@ -9,26 +9,35 @@ import (
 )
 
 type InMessage struct {
-	T           time.Time
-	ComputeTime distuv.Gamma
-	BlockTime   distuv.Gamma
-	Computes    distuv.Poisson
-	N           int
+	T          time.Time
+	StepKeys   int
+	StepRounds int
+	WorkSteps  distuv.Poisson
+	Works      distuv.Poisson
+	BlockTime  distuv.Gamma
+	N          int
 }
 
 type OutMessage struct {
-	In          InMessage
-	ComputeTime int64
-	Worked      int
-	BlockTime   int64
-	Computes    int
-	Elapsed     int64
+	In        InMessage
+	WorkTime  int64
+	Worked    int
+	Steps     int
+	BlockTime int64
+	Elapsed   int64
+	Version   string
 }
 
-func (in *InMessage) work(keys, rounds int) {
-	for i := 0; i < rounds; i++ {
+func (in *InMessage) WorkStep() {
+	if in.StepKeys <= 0 {
+		in.StepKeys = 10
+	}
+	if in.StepRounds <= 0 {
+		in.StepRounds = 10
+	}
+	for i := 0; i < in.StepRounds; i++ {
 		m := make(map[string]interface{})
-		for j := 0; j < keys; j++ {
+		for j := 0; j < in.StepKeys; j++ {
 			var (
 				k = strconv.Itoa(j)
 				v = strconv.Itoa(-j)
@@ -41,40 +50,56 @@ func (in *InMessage) work(keys, rounds int) {
 	}
 }
 
-func (in *InMessage) Compute() (int, int64) {
-	if in.ComputeTime.Alpha == 0 {
-		in.ComputeTime.Alpha = 7
-		in.ComputeTime.Beta = 1
-	}
+func (in *InMessage) Work() (int, time.Duration) {
 	var (
-		ms      = int64(in.ComputeTime.Rand())
-		then    = time.Now().UTC()
-		elapsed time.Duration
-		count   int
+		then  = time.Now()
+		steps = int(in.WorkSteps.Rand())
 	)
-	for {
-		in.work(10, 100)
-		count++
-		if elapsed = time.Now().Sub(then); elapsed > time.Millisecond*time.Duration(ms) {
-			break
-		}
+	for i := 0; i < steps; i++ {
+		in.WorkStep()
 	}
-	return count, elapsed.Nanoseconds() / 1000 / 1000
+	return steps, time.Now().Sub(then)
 }
 
-func (in *InMessage) Block() int64 {
+func (in *InMessage) Block() time.Duration {
+	then := time.Now()
 	if in.BlockTime.Alpha == 0 {
 		in.BlockTime.Alpha = 7
 		in.BlockTime.Beta = 1
 	}
-	ms := int64(in.BlockTime.Rand())
-	time.Sleep(time.Millisecond * time.Duration(ms))
-	return ms
+	var (
+		ms = int64(in.BlockTime.Rand())
+		d  = time.Millisecond * time.Duration(ms)
+	)
+	time.Sleep(d)
+	return time.Now().Sub(then)
 }
 
-func (in *InMessage) Computations() int {
-	if in.Computes.Lambda == 0 {
-		in.Computes.Lambda = 4
+func (in *InMessage) Run() *OutMessage {
+	if in.T.IsZero() {
+		in.T = time.Now().UTC()
 	}
-	return int(in.Computes.Rand())
+
+	var (
+		then = time.Now().UTC()
+		out  = &OutMessage{
+			Worked:  1 + int(in.Works.Rand()),
+			Version: "1",
+		}
+	)
+
+	for i := 0; i < out.Worked; i++ {
+		if 0 < i {
+			out.BlockTime += in.Block().Nanoseconds() / 1000 / 1000
+		}
+		steps, d := in.Work()
+		out.Steps += steps
+		out.WorkTime += d.Nanoseconds() / 1000 / 1000
+	}
+
+	elapsed := time.Now().Sub(then)
+	out.Elapsed = elapsed.Nanoseconds() / 1000 / 1000
+	out.In = *in
+
+	return out
 }

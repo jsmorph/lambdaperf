@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -17,26 +18,9 @@ func init() {
 }
 
 func HandleRequest(ctx context.Context, in lp.InMessage) (string, error) {
-	var (
-		then = time.Now().UTC()
-	)
+	log.Printf("N=%d %#v", in.N, in)
 
-	out := &lp.OutMessage{
-		Computes: in.Computations(),
-	}
-
-	for i := 0; i < out.Computes; i++ {
-		if 0 < i {
-			out.BlockTime += in.Block()
-		}
-		works, ms := in.Compute()
-		out.Worked += works
-		out.ComputeTime += ms
-	}
-
-	elapsed := time.Now().Sub(then)
-	out.Elapsed = elapsed.Nanoseconds() / 1000 / 1000
-	out.In = in
+	out := in.Run()
 
 	js, err := json.Marshal(out)
 	if err != nil {

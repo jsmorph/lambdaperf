@@ -1,13 +1,15 @@
 {
-    "ComputeTime": {
-	"Alpha":5,
-	"Beta":1
+    "N": 1,
+    "StepKeys": 10,
+    "StepRounds": 50,
+    "WorkSteps": {
+	"Lambda": 10
+    },
+    "Works": {
+	"Lambda": 3
     },
     "BlockTime": {
-	"Alpha":20,
-	"Beta":1
-    },
-    "Computes": {
-	"Lambda": 4
+	"Alpha": 20,
+	"Beta": 1
     }
 }
