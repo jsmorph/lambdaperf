@@ -4,7 +4,7 @@ set -e
 
 N=${1:-100}
 
-echo "mb,n,work,ms" > d.csv
+echo "mb,n,work,ms,computes,compute_time,block_time" > d.csv
 
 for I in $(seq 1 8); do
     MB=$((I*128))
