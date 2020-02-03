@@ -20,8 +20,8 @@ specified by `StepKeys`, which is the number of generates keys in a
 map, and `StepRounds`, which is the number of map
 serialization/deserialization round trips performed in a work unit.
 
-At 512MB, the example spec probably has about equal amounts of
-computing and blocking.
+At 512MB, the example [spec](spec.json) does about 4x more blocking
+than computing (at 512MB).
 
 After editing `spec.json`, [run](run.sh) a test that executes the
 Lambda multiple times for various RAM settings.
@@ -46,7 +46,7 @@ ggplot(d, aes(worked,ms,color=mb,group=mb)) +
 	geom_smooth(method=lm) + 
 	scale_colour_gradient(low="red",high="blue") +
 	labs(title="Work vs Elapsed time by RAM",
-	     subtitle="Blocking time is about the same as compute time at 512MB.")
+	     subtitle="Blocking 4x computing at 512MB.")
 ggsave("eff-by-ram.png")
 
 
@@ -81,53 +81,83 @@ ggsave("predict.png")
 
 ![blocking](blocking.png)
 
-The predicted mean latencies (milliseconds) by RAM tier:
-
-```
-    mb         e        ms
-1  128 7.7184122 309.36361
-2  256 6.6762669 267.59312
-3  384 5.6341215 225.82263
-4  512 4.5919762 184.05215
-5  640 3.5498309 142.28166
-6  768 2.5076855 100.51117
-7  896 1.4655402  58.74068
-8 1024 0.4233949  16.97020
-```
-
-For the example job, a 128GB Lambda is about 20 times slower that a
-1GB Lambda.  For comparison, for jobs that do half as much computation
-but the same about of blocking, a 128GB Lambda is about three times
-slower than a 1GB Lambda.
+The predicted mean latencies (milliseconds) by RAM tier (for blocking
+4x more than computing):
 
 ```
     mb        e        ms
-1  128 7.381373 153.71710
-2  256 6.646208 138.40728
-3  384 5.911043 123.09747
-4  512 5.175878 107.78766
-5  640 4.440713  92.47785
-6  768 3.705548  77.16804
-7  896 2.970383  61.85823
-8 1024 2.235218  46.54842
-```
-
-Jobs that do a third as much computation relative to blocking
-operations are only one half as slow at 128MB as at they are at 1GB:
-
-```
-    mb        e        ms
-1  128 9.480224 104.69723
-2  256 8.872136  97.98165
-3  384 8.264047  91.26607
-4  512 7.655958  84.55049
-5  640 7.047870  77.83491
-6  768 6.439781  71.11933
-7  896 5.831692  64.40375
-8 1024 5.223603  57.68817
+1  128 7.405195 148.81850
+2  256 6.655009 133.74240
+3  384 5.904824 118.66629
+4  512 5.154638 103.59019
+5  640 4.404453  88.51409
+6  768 3.654267  73.43798
+7  896 2.904082  58.36188
+8 1024 2.153896  43.28578
 ```
 
 Of course, the level of expected latency, in the context of a specific
 application, is an important consideration.
 
 ![predict](predict.png)
+
+Let's look quickly at costs.  Lambda has a 100ms billing minimum.
+
+```R
+costPerSecGB <- 0.000016667
+dc <- d %>% 
+	mutate(secs = ceiling(ms/100)*100/1000, cost = secs * costPerSecGB * (mb/1024)) %>% 
+	group_by(mb) %>% 
+	summarize(avgSecs = mean(secs), 
+		costPerMillion = 0.20 + sum(cost)*1000*1000/n(),
+		meanLatencyMS = mean(ms),
+		percentageBlocking = mean(ifelse(ms > 0, block_time/ms, 0)))
+```
+
+`milCost` is the cost per million executions.
+
+```
+     mb avgSecs costPerMillion meanLatencyMS percentageBlocking
+  <dbl>   <dbl>          <dbl>         <dbl>              <dbl>
+1   128   0.278          0.778         229.               0.407
+2   256   0.168          0.901         118.               0.518
+3   384   0.137          1.06           86.2              0.658
+4   512   0.129          1.27           77.4              0.715
+5   640   0.127          1.52           74.7              0.740
+6   768   0.125          1.77           73.8              0.746
+7   896   0.125          2.03           73.8              0.746
+8  1024   0.126          2.30           73.7              0.747
+```
+
+For this example job specification, which spends about 75% of time in
+blocking operations, the 128MB Lambdas are 1/3 the cost of using 1GB.
+_Note that this job specification has low mean latency, near the 100ms
+minimum billing unit._ The mean 128MB latency of 229ms is three times
+higher than the 1GB latency.  If you can tolerate 229ms mean latency,
+then go with 128MB.  You spend $0.78/million instead of (say)
+$2.30/million at 1GB.  If you are sensitive to higher latencies, 384MB
+is the sweet spot, with 137ms mean latency and only $1.06 per million.
+
+```R
+dc %>% ggplot(aes(costPerMillion,meanLatencyMS,color=mb,size=mb)) + 
+	geom_point() + 
+	scale_colour_gradient(low="red",high="blue") + 
+	labs(title="Cost vs latency for example Lambda") + 
+	ylim(0,max(dc$meanLatencyMS)) +
+	xlim(0,max(dc$costPerMillion)) + 
+	guides(size=FALSE)
+ggsave("costvlat.png")
+```
+
+![costvlat](costvlat.png)
+
+```R
+dq <- ds %>% 
+	mutate(secs = ceiling(ms/100)*100/1000, cost = secs * costPerSecGB * (mb/1024), blocking = block_time/ms) %>% 
+	group_by(steps_lam,mb) %>% 
+	summarize(blocking = mean(blocking), avg_secs = mean(secs), cost_per_million = 0.20 + sum(cost)*1000*1000/n())
+
+dq %>% arrange(mb,blocking) %>% mutate(MB = as.factor(mb)) %>% ggplot(aes(avg_secs,cost_per_million,shape=MB,group=c(MB))) + geom_point(aes(size=blocking,color=blocking)) + geom_line(alpha=0.3) + scale_shape_manual(values=1:10)
+
+dq %>% filter(avg_secs < 0.5, blocking > 0.75) %>% arrange(cost_per_million)
+```
